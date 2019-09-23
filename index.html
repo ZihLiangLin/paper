@@ -40,396 +40,402 @@
   src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5.1/dat.gui.min.js">
   </script>
 <script>
+javascript:(function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})();
+
 ( function( ) {
-    Math.clamp = function(val,min,max) {
-        return Math.min(Math.max(val,min),max);
-    }
+      Math.clamp = function(val,min,max) {
+          return Math.min(Math.max(val,min),max);
+      }
 } )();
 
 //ref:https://jsfiddle.net/jmcjc5u/g8ozfrn0/ https://jsfiddle.net/ZihLiangLin/4dchs1L7/
 class PIDController {
-constructor(theta = 0, thetaRef = 0) {
-  this.theta = theta;
-  this.thetaRef = thetaRef;
-  this.v = 0;
-  this.KP = 150; // 'spring constant'
-  this.KD = 20; // 'damping'
-  this.KI = 20;
-  this.integral = 0;
-}
+  constructor(theta = 0, thetaRef = 0) {
+    this.theta = theta;
+    this.thetaRef = thetaRef;
+    this.v = 0;
+    this.KP = 150; // 'spring constant'
+    this.KD = 20; // 'damping'
+    this.KI = 20;
+	  this.integral = 0;
+  }
 
-normalize(theta) {
+  normalize(theta) {
 
-  do {
-    theta += Math.PI * 2;
-  } while (theta <= 0)
+    do {
+      theta += Math.PI * 2;
+    } while (theta <= 0)
 
-  theta %= Math.PI * 2;
-  return theta;
-}
+    theta %= Math.PI * 2;
+    return theta;
+  }
 
-update(dt) {
-  let error = this.thetaRef - this.theta;
-  //console.log(error)
-  this.integral += error*dt;
-  let u = this.KP * error + this.KI * this.integral - this.KD * this.v;
-  this.v += u * dt;
-  this.theta += this.v * dt;
-  // singularity: x = 0
-  this.theta = this.normalize(this.theta);
-  //console.log(this.KP, this.KI, this.KD);
-  return this.theta - Math.PI / 2;
-}
-setRef(ref) {
-  this.thetaRef = ref;
-}
+  update(dt) {
+  	let error = this.thetaRef - this.theta;
+    this.integral += error*dt;
+    let u = this.KP * error + this.KI * this.integral - this.KD * this.v;
+    this.v += u * dt;
+    this.theta += this.v * dt;
+    // singularity: x = 0
+    this.theta = this.normalize(this.theta);
+    return this.theta - Math.PI / 2;
+  }
+  setRef(ref) {
+    this.thetaRef = ref;
+  }
 }
 
 var renderer, camera, cameraCar, controls, scene, sceneHUD;
-var hoop, car, buffer, angle = 80, angleFlag = true, dot, o;
-var kp, ki, kd, cir_center, pidControl;
+var hoop, car, buffer, angle = 80, angleFlag = true, dot;
+var kp, ki, kd, cir_center, pidControl, raycaster, mouse = new THREE.Vector2(), pickbles = [];
 var speed = 20, vel = new THREE.Vector3(), pos = new THREE.Vector3(), force = new THREE.Vector3();
 
 var text = new function(){
-  this.kp = 0;
-  this.ki = 0;
-  this.kd = 0;
-  this.cir_center = true;
-}
+    this.kp = 0;
+    this.ki = 0;
+    this.kd = 0;
+    this.cir_center = true;
+ }
 
 init();
 animate();
 //##################### set gui
-kp.onChange(function(value) {
-  pidControl.KP = value;
-});
-ki.onChange(function(value) {
-  pidControl.KI = value;
-});
-kd.onChange(function(value) {
-  pidControl.KD = value;
-});
-cir_center.onChange(function(value) {
-  dot.material.visible = !dot.material.visible
-});
+  kp.onChange(function(value) {
+  	pidControl.KP = value;
+	});
+  ki.onChange(function(value) {
+  	pidControl.KI = value;
+	});
+  kd.onChange(function(value) {
+  	pidControl.KD = value;
+	});
+  cir_center.onChange(function(value) {
+  	dot.material.visible = !dot.material.visible
+	});
 
 function myAtan2(z, x) { // [0, 2pi)
-let atan2 = Math.atan2(z, x);
-return atan2 >= 0 ? atan2 : atan2 + Math.PI * 2; // [0, 2pi)
+  let atan2 = Math.atan2(z, x);
+  return atan2 >= 0 ? atan2 : atan2 + Math.PI * 2; // [0, 2pi)
 }
 
 function setTarget(x, z) {
-return myAtan2(z, x);
+	return myAtan2(z, x);
 }
 
 function init() {
-renderer = new THREE.WebGLRenderer({
-  antialias: true
-});
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+  renderer = new THREE.WebGLRenderer({
+    antialias: true
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
 
-scene = new THREE.Scene();
-camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
-camera.position.set(0, 500, 600)
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+  camera.position.set(0, 500, 600)
 
-cameraCar = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
-cameraCar.position.set (0, 20, 0);
-cameraCar.lookAt (new THREE.Vector3(0, 30, 0));
-cameraCar.rotation.y = -Math.PI/2;
+  cameraCar = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+  cameraCar.position.set (0, 20, 0);
+  cameraCar.lookAt (new THREE.Vector3(0, 30, 0));
+  cameraCar.rotation.y = -Math.PI/2;
 
-sceneHUD = new THREE.Scene();
+  sceneHUD = new THREE.Scene();
 
-var gridXZ = new THREE.GridHelper(500, 20, 'red', 'white');
-//scene.add(gridXZ);
+  var gridXZ = new THREE.GridHelper(500, 20, 'red', 'white');
+  //scene.add(gridXZ);
 
-let controls = new THREE.OrbitControls(camera, renderer.domElement);
+  let controls = new THREE.OrbitControls(camera, renderer.domElement);
 
-var ambientLight = new THREE.AmbientLight(0x555555);
-scene.add(ambientLight);
+  var ambientLight = new THREE.AmbientLight(0x555555);
+  scene.add(ambientLight);
 
-window.addEventListener('resize', onWindowResize, false);
-//#########################################################
-var gui = new dat.GUI({load: loadJSON()});
-gui.remember (text);
-kp = gui.add(text, 'kp', 0, 500);
-ki = gui.add(text, 'ki', 0, 150);
-kd = gui.add(text, 'kd', 0, 150);
-cir_center = gui.add(text, 'cir_center');
-//#########################################################
-pidControl = new PIDController();
+	raycaster = new THREE.Raycaster();
+  document.addEventListener('mousedown', onDocumentMouseDown, false);
+  window.addEventListener('resize', onWindowResize, false);
+  //#########################################################
+  var gui = new dat.GUI({load: loadJSON()});
+  gui.remember (text);
+  kp = gui.add(text, 'kp', 0, 500);
+  ki = gui.add(text, 'ki', 0, 150);
+  kd = gui.add(text, 'kd', 0, 150);
+  cir_center = gui.add(text, 'cir_center');
+  //#########################################################
+  pidControl = new PIDController();
 
-o = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
-scene.add(o);
-o.material.visible = false;
+  hoop = new THREE.Mesh(new THREE.CircleGeometry(50, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      side: THREE.DoubleSide
+    }));
+  scene.add(hoop);
+  hoop.position.set(0, 50, -250);
 
-hoop = new THREE.Mesh(new THREE.CircleGeometry(50, 32),
-  new THREE.MeshBasicMaterial({
-    color: 0x00ff00,
-    side: THREE.DoubleSide
+  hoop.material.needsUpdate = true;            //important
+
+  car = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 40), new THREE.MeshBasicMaterial({
+  	color: 0x000000
+  })
+);
+	let carFront = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), new THREE.MeshBasicMaterial({
+  	color: 0xff0000
+  })
+);
+	carFront.position.z = -30
+	car.add(carFront)
+	scene.add(car);
+  car.position.set(0, 10, -10);
+
+  let floor = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), new THREE.MeshBasicMaterial({
+    color: 0x0000ff,
+    transparent: true,
+    opacity: 1
   }));
-o.add(hoop);
-hoop.position.set(0, 50, -250);
+  scene.add(floor);
+  floor.rotation.x = -Math.PI / 2;
+  pickables = [floor];
+  /////////////////////////////////////////////////////////
+  // render a rotating teapot to texture
+  // then apply the texture to a planeGeometry
 
-hoop.material.needsUpdate = true;            //important
-hoop.updateMatrixWorld();
-let status = hoop.matrixWorld;
+  renderTarget = new THREE.WebGLRenderTarget(
+    64, 64, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.NearestFilter,
+    }
+  );
 
-car = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 40), new THREE.MeshBasicMaterial({
-  color: 0x000000
-})
-);
-let carFront = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), new THREE.MeshBasicMaterial({
-  color: 0xff0000
-})
-);
-carFront.position.z = -30
-car.add(carFront)
-scene.add(car);
-car.position.set(0, 10, -10);
+  let planee = new THREE.PlaneBufferGeometry(64, 64);
+  quad = new THREE.Mesh(planee,
+    new THREE.MeshBasicMaterial({
+     map: renderTarget.texture,
+      side: THREE.DoubleSide,
+      visible: false
+    }));
+  scene.add(quad);
+  quad.position.set(0, 500, 500);
 
-let floor = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), new THREE.MeshBasicMaterial({
-  color: 0x0000ff,
-  transparent: true,
-  opacity: 1
-}));
-scene.add(floor);
-floor.rotation.x = -Math.PI / 2;
-/////////////////////////////////////////////////////////
-// render a rotating teapot to texture
-// then apply the texture to a planeGeometry
+  buffer = new Uint8Array( 64*64*4 );
 
-renderTarget = new THREE.WebGLRenderTarget(
-  64, 64, {
-    minFilter: THREE.LinearFilter,
-    magFilter: THREE.NearestFilter,
-  }
-);
+  initHUD();
 
-let planee = new THREE.PlaneBufferGeometry(64, 64);
-quad = new THREE.Mesh(planee,
-  new THREE.MeshBasicMaterial({
-   map: renderTarget.texture,
-    side: THREE.DoubleSide,
-    visible: false
-  }));
-scene.add(quad);
-quad.position.set(0, 500, 500);
-
-buffer = new Uint8Array( 64*64*4 );
-
-initHUD();
-
-vel.set(speed, 0, 0);
+  vel.set(speed, 0, 0);
 }
 
+
+function onDocumentMouseDown(event){
+  event.preventDefault();
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  // find intersections
+  raycaster.setFromCamera(mouse, camera);
+  var intersects = raycaster.intersectObjects(pickables);
+  if (intersects.length > 0) {
+    hoop.position.copy(intersects[0].point);
+    hoop.position.y = 50;
+    hoop.rotation.y = myAtan2(-hoop.position.z, hoop.position.x) + Math.PI/2;
+    car.translateOnAxis(intersects[0].face.normal,500);
+  }
+}
+
+
 function onWindowResize() {
-camera.aspect = window.innerWidth / window.innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function readpixel2_0(){
-renderer.readRenderTargetPixels ( renderTarget, 0, 0, 64, 64, buffer);
-let readHoop = 0;
-for(let i = 0; i < buffer.length; i+=4){
-  if(buffer[i] == 0 && buffer[i+1] == 255){
-    readHoop++;
-  }
-  if(readHoop >= 20){
-    break;
-  }
-}
-let x, y, x1, y1, x2, y2, x3, y3 = 31;
-for(let i = 0; i < buffer.length; i+=4){
-  x = (i / 4) % 64;
-  y = (i / 4) / 64;
-  if(buffer[i+1] == 255){
-    x1 = x;
-    y1 = y;
-    x2 = x;
-    y2 = 64 - y;
-    break;
-  }
-}
-for(let i = 31*64*4; i < 32*64*4; i+=4){
-  if((buffer[i+1] == 255 && buffer[i+5] == 0) || (buffer[i+1] == 0 && buffer[i+5] == 255)){
-    x3 = (i / 4) % 64;
-    if(x3 == x1){
-      if(buffer[i+1] == 255 && buffer[i+5] == 0)
-        x3++;
-      else
-        x3--;
+	renderer.readRenderTargetPixels ( renderTarget, 0, 0, 64, 64, buffer);
+  let readHoop = 0;
+  for(let i = 0; i < buffer.length; i+=4){
+    if(buffer[i] == 0 && buffer[i+1] == 255){
+    	readHoop++;
     }
-    break;
+    if(readHoop >= 20){
+			break;
+    }
   }
-}
-calcCenter(x1, y1, x2, y2, x3, y3);
+  let x, y, x1, y1, x2, y2, x3, y3 = 31;
+  for(let i = 0; i < buffer.length; i+=4){
+  	x = (i / 4) % 64;
+    y = (i / 4) / 64;
+    if(buffer[i+1] == 255){
+    	x1 = x;
+      y1 = y;
+      x2 = x;
+      y2 = 64 - y;
+      break;
+    }
+  }
+  for(let i = 31*64*4; i < 32*64*4; i+=4){
+  	if((buffer[i+1] == 255 && buffer[i+5] == 0) || (buffer[i+1] == 0 && buffer[i+5] == 255)){
+    	x3 = (i / 4) % 64;
+      if(x3 == x1){
+      	if(buffer[i+1] == 255 && buffer[i+5] == 0)
+        	x3++;
+        else
+        	x3--;
+      }
+      break;
+    }
+  }
+  calcCenter(x1, y1, x2, y2, x3, y3);
 }
 
 function calcCenter(x1, y1, x2, y2, x3, y3){
-var a, b;
-  a = (y2 - y1) / (x2 - x1);
-  b = y1 - a * x1;
+	var a, b;
+    a = (y2 - y1) / (x2 - x1);
+    b = y1 - a * x1;
 
-  var xMiddle = (x1 + x2) / 2;
-  var yMiddle = (y1 + y2) / 2;
-  var c, Px, Py;
-  if (a != 0) {
-      c = yMiddle - (-1 / a) * xMiddle;
-      Px = (x1*x1 + y1*y1 - x3*x3 - y3*y3 - 2*c*y1 + 2*c*y3) / (2 * ((x1 - x3) - (1 / a) * (y1 - y3)));
-      Py = (-1 / a) * Px + c;
-  } else {
-      Px = c = xMiddle;
-      Py = (x1*x1 + y1*y1 - x3*x3 - y3*y3 + 2 * Px * (x3 - x1)) / (2 * (y1 - y3));
-  }
-  dot.position.set(Px-32, Py-32, 0);
+    var xMiddle = (x1 + x2) / 2;
+    var yMiddle = (y1 + y2) / 2;
+    var c, Px, Py;
+    if (a != 0) {
+        c = yMiddle - (-1 / a) * xMiddle;
+        Px = (x1*x1 + y1*y1 - x3*x3 - y3*y3 - 2*c*y1 + 2*c*y3) / (2 * ((x1 - x3) - (1 / a) * (y1 - y3)));
+        Py = (-1 / a) * Px + c;
+    } else {
+        Px = c = xMiddle;
+        Py = (x1*x1 + y1*y1 - x3*x3 - y3*y3 + 2 * Px * (x3 - x1)) / (2 * (y1 - y3));
+    }
+    dot.position.set(Px-32, Py-32, 0);
 }
 
 //ref:http://jsfiddle.net/ZihLiangLin/shkqmy1b/1/
 function initHUD() {
-// sceneHUD: a simple line boundary
-sceneHUD = new THREE.Scene();
-cameraHUD1 = new THREE.OrthographicCamera(-64.5, 64.5, 64.5, -64.5, -64.5, 64.5);
-cameraHUD1.position.z = 20;  // for border
+  // sceneHUD: a simple line boundary
+  sceneHUD = new THREE.Scene();
+  cameraHUD1 = new THREE.OrthographicCamera(-64.5, 64.5, 64.5, -64.5, -64.5, 64.5);
+  cameraHUD1.position.z = 20;  // for border
 
-var lineGeometry = new THREE.Geometry();
-lineGeometry.vertices.push(new THREE.Vector3(-64, -64, 0),
-  new THREE.Vector3(64, -64, 0),
-  new THREE.Vector3(64, 64, 0),
-  new THREE.Vector3(-64, 64, 0),
-  new THREE.Vector3(-64, -64, 0));
-var line = new THREE.Line(lineGeometry,
-  new THREE.LineBasicMaterial({
-    color: 0xffffff
-  }));
-sceneHUD.add(line);
+  var lineGeometry = new THREE.Geometry();
+  lineGeometry.vertices.push(new THREE.Vector3(-64, -64, 0),
+    new THREE.Vector3(64, -64, 0),
+    new THREE.Vector3(64, 64, 0),
+    new THREE.Vector3(-64, 64, 0),
+    new THREE.Vector3(-64, -64, 0));
+  var line = new THREE.Line(lineGeometry,
+    new THREE.LineBasicMaterial({
+      color: 0xffffff
+    }));
+  sceneHUD.add(line);
 
-dot = new THREE.Mesh(new THREE.CircleGeometry(5, 32),
-  new THREE.MeshBasicMaterial({
-    color: 0xff00ff,
-    side: THREE.DoubleSide
-  }));
-  sceneHUD.add(dot);
+  dot = new THREE.Mesh(new THREE.CircleGeometry(5, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0xff00ff,
+      side: THREE.DoubleSide
+    }));
+    sceneHUD.add(dot);
 
-var gridXZ = new THREE.GridHelper(128, 8, 0x880000, 0x888888);
-sceneHUD.add(gridXZ);
-gridXZ.rotation.x = Math.PI/2;
+  var gridXZ = new THREE.GridHelper(128, 8, 0x880000, 0x888888);
+  sceneHUD.add(gridXZ);
+  gridXZ.rotation.x = Math.PI/2;
 }
 
 function loadJSON(){
-return{
-"preset": "good_parameter1",
-"remembered": {
-  "Default": {
-    "0": {
-      "cir_deg": 0,
-      "kp": 0,
-      "ki": 0,
-      "kd": 0
+  return{
+  "preset": "good_parameter1",
+  "remembered": {
+    "Default": {
+      "0": {
+        "cir_deg": 0,
+        "kp": 0,
+        "ki": 0,
+        "kd": 0
+      }
+    },
+    "good_parameter1": {
+      "0": {
+        "cir_deg": 0,
+        "kp": 500,
+        "ki": 30,
+        "kd": 30
+      }
     }
   },
-  "good_parameter1": {
-    "0": {
-      "cir_deg": 0,
-      "kp": 500,
-      "ki": 30,
-      "kd": 30
-    }
-  }
-},
-"closed": false,
-"folders": {}
-}
+  "closed": false,
+  "folders": {}
+	}
 }
 
 function animate() {
-//takeScreenshot();
-o.rotation.y = Math.PI*(800/3600)*2 - Math.PI/2;
-//o.rotation.y = Math.PI*(angle/3600)*2 - Math.PI/2;
-if(angle > 1001 && angleFlag) angleFlag = !angleFlag;
-if(angle < 799 && !angleFlag) angleFlag = !angleFlag;
+	//takeScreenshot();
 
-if(angleFlag) angle += 10;
-else angle -= 10;
+	render();
+  requestAnimationFrame(animate);
 
-render();
-requestAnimationFrame(animate);
+  hoop.updateMatrixWorld();
+  let statuss = hoop.matrixWorld;
+  let hoop_normal = hoop.geometry.faces[0].normal.clone().applyMatrix4(statuss).normalize();
+  console.log(hoop_normal)
 
-hoop.updateMatrixWorld();
-let status = hoop.matrixWorld;
-let hoop_rotate = hoop.position.clone().applyMatrix4(status);
+  let dt = 1 / 60; //60fps
 
-let thetaRef = setTarget((hoop_rotate.x), -(hoop_rotate.z));
-pidControl.setRef(thetaRef);//target);
+  //**********************************************************************************************
+  let maxspeed = 100;
+  let target = new THREE.Vector3();
+  target.set(hoop.position.x, 0, hoop.position.z);
 
-let dt = 1 / 60; //60fps
-let theta = pidControl.update(dt);
+  force.copy(target.clone().sub(pos).normalize().multiplyScalar(maxspeed).sub(vel))
+  vel.add(force.clone().multiplyScalar(dt));
 
-//**********************************************************************************************
-let maxspeed = 50;
-let target = new THREE.Vector3();
-target.set(hoop_rotate.x/2, 0, hoop_rotate.z/2);
+  let diff = target.clone().sub(pos);
+  let dst = diff.length();
+  let arrivalDistance = 100;
+  let normal_dot = hoop_normal.clone().dot(vel)
+  if (dst < arrivalDistance) {
+    vel.setLength(dst);
+    if(dst - 50 < 1e-3 && normal_dot > 0) vel.setLength(0.1);
+  }
 
-force.copy(target.clone().sub(pos).normalize().multiplyScalar(maxspeed).sub(vel))
-vel.add(force.clone().multiplyScalar(dt));
+  speed = vel.length();
+	vel.setLength(Math.clamp (speed, 0, maxspeed))
+	pos.add (vel.clone().multiplyScalar(dt));
 
-let diff = target.clone().sub(pos);
-let dst = diff.length();
-let arrivalDistance = 50;
-//console.log(dst)
-if (dst < arrivalDistance) {
-  vel.setLength(dst);
-  //if(dst < 30) vel.setLength(0);
-}
+  let thetaRef = setTarget(hoop.position.x, -hoop.position.z);
+  pidControl.setRef(thetaRef);
 
-speed = vel.length();
-vel.setLength(Math.clamp (speed, 0, maxspeed))
-//vel.applyAxisAngle (new THREE.Vector3(0,1,0), theta + Math.PI/2);
-pos.add (vel.clone().multiplyScalar(dt));
-car.position.copy(pos);  //question
+  let theta = pidControl.update(dt);
 
-if (vel.length() > 0.1) {
-  //theta = myAtan2(vel.z, vel.x);
-  car.rotation.y = theta;
-}
-//*************************************************************************************************
-
-
-cameraCar.position.copy ( car.localToWorld (new THREE.Vector3(0,30,40)))
-cameraCar.lookAt (car.position.x, car.position.y + 31, car.position.z);
+  if(thetaRef - theta > 1e-3){
+  	car.rotation.y = Math.atan2 (-vel.z, vel.x) - Math.PI/2;
+  }
+  car.position.copy(pos);
+  //*************************************************************************************************
+  cameraCar.position.copy ( car.localToWorld (new THREE.Vector3(0,30,40)))
+  cameraCar.lookAt (car.position.x, car.position.y + 31, car.position.z);
 }
 
 function render(){
-renderer.setRenderTarget (renderTarget);
-renderer.render(scene, cameraCar);
-renderer.setRenderTarget (null);
-readpixel2_0();
+  renderer.setRenderTarget (renderTarget);
+  renderer.render(scene, cameraCar);
+  renderer.setRenderTarget (null);
+  readpixel2_0();
 
-var WW = window.innerWidth;
-var HH = window.innerHeight;
+  var WW = window.innerWidth;
+  var HH = window.innerHeight;
 
-renderer.autoClear = false;
-renderer.setScissorTest(true);
+	renderer.autoClear = false;
+  renderer.setScissorTest(true);
 
-renderer.setViewport(0, 0, WW, HH);
-camera.aspect = WW / HH;
-camera.updateProjectionMatrix();
+  renderer.setViewport(0, 0, WW, HH);
+  camera.aspect = WW / HH;
+  camera.updateProjectionMatrix();
 
-renderer.setScissor(0, 0, WW, HH);
-renderer.clear();
-renderer.render(scene, camera);
+  renderer.setScissor(0, 0, WW, HH);
+  renderer.clear();
+  renderer.render(scene, camera);
 
-renderer.setViewport(0, 0, WW / 3, HH / 3);
-renderer.setScissor(0, 0, WW / 3, HH / 3);
-// no need to set aspect (since it is still ONE)
-renderer.clear();  // important!
-renderer.setClearColor(0x000000);
-renderer.render(sceneHUD, cameraHUD1);
-renderer.render(scene, cameraCar);
+  renderer.setViewport(0, 0, WW / 3, HH / 3);
+  renderer.setScissor(0, 0, WW / 3, HH / 3);
+  // no need to set aspect (since it is still ONE)
+  renderer.clear();  // important!
+  renderer.setClearColor(0x000000);
+  renderer.render(sceneHUD, cameraHUD1);
+  renderer.render(scene, cameraCar);
 
-renderer.setScissorTest(false);
-renderer.autoClear = true;
+  renderer.setScissorTest(false);
+  renderer.autoClear = true;
 }
 
 </script>
