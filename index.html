@@ -173,7 +173,7 @@ function init() {
       side: THREE.DoubleSide
     }));
   scene.add(hoop);
-  hoop.position.set(-125, 50, 125);
+  hoop.position.set(0, 50, -250);
 
   hoop.material.needsUpdate = true; //important
 
@@ -234,6 +234,7 @@ function onDocumentMouseDown(event) {
     hoop.position.copy(intersects[0].point);
     hoop.position.y = 50;
     hoop.rotation.y = Math.atan2(-hoop.position.z, hoop.position.x) + Math.PI / 2;
+    //car.position.copy(intersects[0].point);
   }
 }
 
@@ -332,27 +333,25 @@ function initHUD() {
   gridXZ.rotation.x = Math.PI / 2;
 }
 
-function autoDocking(dt, car_normal) {
+function autoDocking(dt, x, y, z) {
   //use vessel coordinate
+  let car_normal = new THREE.Vector3(x, y, z); //目前車頭所看向的方向
   let target = new THREE.Vector3();
-  target.set(hoop.position.x, 0, hoop.position.z);
+  target.set(hoop.position.x - car.position.x, 0, hoop.position.z - car.position.z);
 
   let thetaRef = 0;
   pidControl.setRef(thetaRef);
 
   let arrival = 60;
-  let dst = target.clone().sub(pos).length();
+  let dst = hoop.position.clone().sub(car.position).length();
   var error = car_normal.angleTo(target);
 
   let errorSide = car_normal.clone().cross(target).dot(new THREE.Vector3(0, 1, 0));
   if (errorSide < 0) error = -error;
   let theta = pidControl.update(dt, error);
+  //console.log(pidControl.v)
   car.rotation.y = theta;
-  let car_rotate = car.localToWorld(new THREE.Vector3(1, 0, 0)).normalize();
-  if (dst < arrival) {
-    pos.add(new THREE.Vector3(0, 0, 0));
-  }
-  else pos.add(car_rotate);
+  if(dst > arrival) car.position.add(car_normal.multiplyScalar(1))
 }
 
 function loadJSON() {
@@ -390,9 +389,7 @@ function animate() {
   let dt = 1 / 60; //60fps
   car.updateMatrixWorld();
   let statuss = car.matrixWorld;
-  let car_normal = car.geometry.faces[0].normal.clone().applyMatrix4(statuss);
-
-  autoDocking(dt, car_normal);
+  autoDocking(dt, statuss.elements[0], statuss.elements[1], statuss.elements[2]);
 
   cameraCar.position.copy(car.localToWorld(new THREE.Vector3(-40, 30, 0)))
   cameraCar.lookAt(car.position.x, car.position.y + 31, car.position.z);
