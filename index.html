@@ -342,7 +342,7 @@ function autoDocking(dt, x, y, z) {
   let thetaRef = 0;
   pidControl.setRef(thetaRef);
 
-  let arrival = 60;
+  let arrival = 70;
   let dst = hoop.position.clone().sub(car.position).length();
   var error = car_normal.angleTo(target);
 
