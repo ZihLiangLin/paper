@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+<style>
+</style>
+</head>
+
+<body>
+
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/three.js/107/three.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+<script src='https://jyunming-chen.github.io/WebAudio/js/shared.js'></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js"></script>
+
+<script>
+//////////////////////////////////////////////////////////////////////////////
+var RhythmSample = function () {
+    loadSounds(this, {
+        kick: 'https://jyunming-chen.github.io/WebAudio/kick.wav'
+    });
+};
+RhythmSample.prototype.play = function () {
+        playSound(this.kick);
+};
+/////////////////////////////////////////////////////////////////////////////////////////
+var sample = new RhythmSample();
+///////////////////////////////////////////////////////////////////////////////////
+var clock = new THREE.Clock();
+var scene, renderer, camera;
+var plane;
+var raycaster, mouse = new THREE.Vector2(), pickables = [];
+var socket = io();
+
+init();
+animate();
+// 當收到伺服器回傳到 greet 事件
+socket.on("play", function () {
+    sample.play();
+    console.log('receive');
+});
+
+function init() {
+  renderer = new THREE.WebGLRenderer({
+    antialias: true
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+  document.body.appendChild(renderer.domElement);
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+  camera.position.set(-200, 150, 250); // important
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+  scene = new THREE.Scene();
+
+  let gridXZ = new THREE.GridHelper(100, 10, 'red', 'white');
+  //scene.add(gridXZ);
+
+  let axes = new THREE.AxisHelper(10);
+  //scene.add(axes);
+
+  window.addEventListener('resize', onWindowResize, false);
+  //document.addEventListener('mousedown', onDocumentMouseDown, false);
+
+  let floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshBasicMaterial({color:0xffffff, side:THREE.DoubleSide}));
+  //scene.add(floor);
+  floor.rotation.x = Math.PI/2
+
+  button = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), new THREE.MeshBasicMaterial({color:0xff0000}));
+  //scene.add(button);
+  button.position.y = 10;
+  //pickables.push(button)
+
+  raycaster = new THREE.Raycaster();
+}
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+function onDocumentMouseDown(event) {
+  event.preventDefault();
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  // find intersections
+  raycaster.setFromCamera(mouse, camera);
+  var intersects = raycaster.intersectObjects(pickables, true);
+  if (intersects.length > 0) {
+      socket.emit("greet");
+  }
+}
+function animate() {
+    requestAnimationFrame(animate);
+    render();
+}
+function render() {
+    renderer.render(scene, camera);
+}
+</script>
+</body>
+
+</html>
